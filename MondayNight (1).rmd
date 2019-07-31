@@ -1,0 +1,297 @@
+---
+title: "FINAl R code"
+author: "Susan Jiao"
+date: "April 20, 2019"
+output: html_document
+---
+training data
+```{r}
+rm(list = ls())
+setwd("C:/Users/JIAO/Desktop")
+yelp <- read.csv("C:/Users/JIAO/Desktop/YELP/train_Madison.csv")
+#remove the rows that contains NA for postal codes
+NARow <- which(is.na(yelp$postal_code))
+yelp <- yelp[ -NARow, ]
+
+######Word Dictionary##########
+library(dplyr)
+library(tidytext)
+library(tm)
+library(stringr)
+yelp$text <- as.character(yelp$text)
+yelp_text_tbl <- tbl_df(data.frame(uniqueID = 1:9000,yelp[1:9000,]))
+yelp_text_tbl_words <- yelp_text_tbl %>% select(uniqueID,text) %>%
+                      unnest_tokens(word, text) %>% filter(str_detect(word,"^[a-z']+$")) %>%
+                      group_by(uniqueID) %>% count(word) 
+ReviewWordMatrix <- yelp_text_tbl_words %>% cast_dtm(uniqueID, word, n)
+dim(ReviewWordMatrix)
+
+ReviewWordMatrix
+
+
+
+
+
+
+#######START HERE################################################################
+vector = c()
+no.punc = c(1:length(train.madison$text))
+for (i in 1:length(train.madison$text)) {
+  no.punc[i] = gsub("[[:punct:]]", "", train.madison$text[i])
+   #no.punc[i] = gsub("[\r\n]", "", no.punc[i]) ##newly added
+  vector =c(vector, strsplit(no.punc[i], " "))
+}
+vectorunlisted = unlist(vector)
+length(vectorunlisted)
+#wordlevels<-unique(vectorunlisted)
+#length(wordlevels)
+
+library(stringr)
+library(data.table)
+
+#ss$vectorunlisted
+ss = data.frame(vectorunlisted)
+sss <- setDT(ss)[, .(freq = .N), vectorunlisted]
+sss = as.data.frame(sss)
+str(sss)
+
+frequentIndex <- c()
+
+for(i in 1:length(sss$freq)){
+  if(sss$freq[i] > 500){
+    frequentIndex <- c(frequentIndex, i )
+  }
+}
+length(frequentIndex)
+tail(sss$vectorunlisted[frequentIndex])
+head(frequentIndex)
+head(sss$vectorunlisted[frequentIndex])
+
+subtractionIndex <- c()
+for(i in frequentIndex){
+  if(sss$vectorunlisted[i] %in% c("I", "a", "A", "and", "an","to", "the", "The", "he", "she", "it", "her", "him", "my", "its", "they",
+                                  "them", "theirs", "this", "that", "the", "be", "To", "only", "is", "dont", "see",
+                                  "were", "was", "here", "there", "as", "Then", "then", "can", "could", "As", "be", "in",
+                                  "had", "have", "one", "two", "us", "would", "2", "5", "is", "are", "some", "30", "of",
+                                  "Id", "i", "Be", "youre", "thats", "4", "3", "Ive", "which", "in", "on", "got", 
+                                  "place", "work", "for", "tables", "made", "10", "We", "too", "Im", "\n\nI", "into",
+                                  "\n\nThe", "also")){
+    subtractionIndex <- c(subtractionIndex, i)
+  }
+}
+#str(subtractionIndex)
+#str(frequentIndex)
+#length(frequentIndex)
+#length(subtractionIndex)
+#frequentIndex[-5]
+#frequentIndex
+
+subtractionMatch <- match(subtractionIndex, frequentIndex)
+
+
+reducedfrequentIndex <- frequentIndex[-subtractionMatch]
+length(reducedfrequentIndex)
+head(sss$vectorunlisted[reducedfrequentIndex])
+
+##trying to subtract the words that already exists in the training dataset
+##subtract certain columns from the data
+dimtrain <- dim(train.madison)
+
+existingIndex <- c()
+
+for(j in reducedfrequentIndex){
+    if(sss$vectorunlisted[j] %in% colnames(train.madison)){
+      existingIndex <- c(existingIndex, j)
+    }
+  }
+
+length(existingIndex) #488
+existingmatch <- match(existingIndex, reducedfrequentIndex)
+
+finalIndex <- reducedfrequentIndex[-existingmatch]
+length(finalIndex) ###CORRECT FINAL INDEX ##3456
+
+trainADD <-as.vector(sss$vectorunlisted[finalIndex])
+str(trainADD)
+toberemovedIndex <- c()
+##trainADD[finalIndex]
+
+for(i in 1:length(trainADD)){
+  if(trainADD[i] %in% c("20", "we", "our","20","","at","if","your","these","other","if","They","will","with","their","by","My","me",
+                        "There","\n\nMy","He","been","has","Our","This","\n\nWe","And","am","may",
+                        "wasnt","Yes","did","should","","do","It","any","12","If","you","make","Dont","She","At","theyre",
+                        "1","Their","Sunday","those","Ill","his","or","That","does","yet","One","For","itself","etc","6",
+                        "four","Also","Had","Maybe","wont","15","Just","7","\nThe","8","others","9","25","\nI","With","45",
+                        "within")){
+    toberemovedIndex <- c(toberemovedIndex, i)
+  }
+}
+trainADD<-trainADD[-toberemovedIndex]
+
+length(toberemovedIndex)
+length(trainADD)
+str(trainADD)
+
+##Everything cleaned by now
+#####################################################################
+
+
+#try to add a new column to the training data set and 
+#for each row, count the number of times that word appeared in the sting of text
+
+
+
+train.madison$text <- as.character(train.madison$text)
+library(stringr)
+new_words <- trainADD
+new_X <- matrix(0, nrow(train.madison), length(new_words))
+colnames(new_X) <- new_words
+for (i in 1:length(new_words)){
+  new_X[,i] <- str_count(train.madison$text, regex(new_words[i], ignore_case=T)) # ignore the upper/lower case in the text
+}
+
+train.madison$however.comb <- train.madison$however + train.madison$However
+
+
+length(trainADD)
+  
+train.madison[trainADD] <-new_X[,1:length(trainADD)] ###important!!!
+dim(train.madison)
+###########################################################
+
+
+
+
+```
+
+
+MLR
+```{r}
+#####################################################################
+###START HERE MLR!!!!!
+
+attach(train.madison)
+train.madison$Id = NULL
+train.madison$nchar = NULL
+train.madison$nword = NULL
+train.madison$text = NULL
+train.madison$name = NULL
+train.madison$else. = NULL
+
+##another method
+train.madison$postal_code = NULL
+train.madison$city = NULL
+train.madison$TRUE. = NULL
+dim(train.madison)
+
+mlr.model = lm(star~(.)*(not+but), data = train.madison)
+##summary(mlr.model)
+
+
+
+```
+
+submission code
+```{r}
+test <- read.csv("C:/Users/JIAO/Desktop/YELP/test_Madison.csv")
+attach(test)
+
+#####!!!DO NOT RUN#################
+test$Id = NULL
+test$nchar = NULL
+test$nword = NULL
+##test$text = NULL
+test$name = NULL
+test$else. = NULL
+narow<-which(is.na(test$postal_code))
+for(i in 1:length(narow)){
+  test$postal_code[narow[i]] = 53715
+}
+
+##newly added null
+test$postal_code = NULL
+test$city = NULL
+dim(test)
+##
+setdiff( colnames(test) ,colnames(train.madison))
+test$TRUE. = rep(0, each= dim(test)[1])
+#######!!!DO NOT RUN####################################################
+
+####here add the columns above 500 FRE and Count
+
+test$text <- as.character(test$text)
+library(stringr)
+new_words <- trainADD
+new_X <- matrix(0, nrow(test), length(new_words))
+colnames(new_X) <- new_words
+for (i in 1:length(new_words)){
+  new_X[,i] <- str_count(test$text, regex(new_words[i], ignore_case=T)) # ignore the upper/lower case in the text
+}
+
+test[trainADD] <-new_X[,1:length(trainADD)]  ##important
+
+test$however.comb <- test$however + test$However
+
+
+####!!!!BEN'S CODE##############
+X<- model.matrix(mlr.model)
+X <- X[,-1]
+X <- as.data.frame(X)
+View(colnames(X))
+
+A <- t(X)
+A <- as.data.frame(A)
+
+?rownames
+length(rownames(A))
+length(colnames(train.madison))
+#############!!!!BEN'code###############
+
+
+
+##!!!!
+test <- data.frame(Id=test$Id, Expected=predict(mlr.model, newdata = test))
+
+####DONT###############
+test$Expected <- predict(mlr.model, as.data.frame(colnames(X)),data=test )
+test2 <- read_csv("test_Madison.csv")
+test$Id = test2$Id
+##########DONT ################
+
+#out_df[narow[2],2] = 2.5
+#out_df[narow[1],2] = 2.5
+
+out_df <- test %>%
+  select(Id,Expected)
+
+#out_df$Expected[11694] = 2.5
+#out_df$Expected[15461] = 2.5
+
+
+##IMPORTANT
+out_df$Expected[which(out_df$Expected > 5)] = 5
+out_df$Expected[which(out_df$Expected < 1)] = 1
+which(is.na(out_df$Expected))   ###check NA
+#out_df$Expected[which(out_df$Expected > 1 & out_df$Expected < 1.25)] = 1
+#out_df$Expected[which(out_df$Expected > 1.25 & out_df$Expected < 1.5)] = 1.5
+#out_df$Expected[which(out_df$Expected > 1.5 & out_df$Expected < 1.75)] = 1.5
+#out_df$Expected[which(out_df$Expected > 1.75 & out_df$Expected < 2.0)] = 2
+#out_df$Expected[which(out_df$Expected > 2 & out_df$Expected < 2.25)] = 2
+#out_df$Expected[which(out_df$Expected > 2.25 & out_df$Expected < 2.5)] = 2.5
+#out_df$Expected[which(out_df$Expected > 2.5 & out_df$Expected < 2.75)] = 2.5
+#out_df$Expected[which(out_df$Expected > 2.75 & out_df$Expected < 3)] = 3
+#out_df$Expected[which(out_df$Expected > 3 & out_df$Expected < 3.25)] = 3
+#out_df$Expected[which(out_df$Expected > 3.25 & out_df$Expected < 3.5)] = 3.5
+#out_df$Expected[which(out_df$Expected > 3.5 & out_df$Expected < 3.75)] = 3.5
+#out_df$Expected[which(out_df$Expected > 3.75 & out_df$Expected < 4)] = 4
+#out_df$Expected[which(out_df$Expected > 4 & out_df$Expected < 4.25)] = 4
+#out_df$Expected[which(out_df$Expected > 4.25 & out_df$Expected < 4.5)] = 4.5
+#out_df$Expected[which(out_df$Expected > 4.5 & out_df$Expected < 4.75)] = 4.5
+#out_df$Expected[which(out_df$Expected > 4.75 & out_df$Expected < 5)] = 5
+
+
+
+write_csv(out_df, "submission_test.csv")
+
+```
+
